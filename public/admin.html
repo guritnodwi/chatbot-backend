@@ -30,6 +30,7 @@
 
   <div id="upload-section">
     <p>Login berhasil. Chatbot membaca <b>semua file .docx</b> di bawah ini sekaligus.</p>
+    <input type="search" id="filterFile" placeholder="🔍 Filter file .docx (ketik nama)...">
     <table>
       <thead><tr><th>File</th><th>Entri</th><th></th></tr></thead>
       <tbody id="fileList"><tr><td colspan="3">Memuat...</td></tr></tbody>
@@ -70,13 +71,25 @@
 
   const authHeader = () => ({ "x-admin-password": savedPassword });
 
+  let allFiles = [];
+
   async function refreshList() {
     const res = await fetch("/api/admin/files", { headers: authHeader() });
     const data = await res.json();
+    allFiles = data.files;
+    renderList();
+  }
+
+  function renderList() {
+    const data = {
+      files: allFiles.filter((f) =>
+        f.name.toLowerCase().includes(document.getElementById("filterFile").value.trim().toLowerCase())
+      ),
+    };
     const tbody = document.getElementById("fileList");
     tbody.innerHTML = "";
     if (!data.files.length) {
-      tbody.innerHTML = '<tr><td colspan="3">Belum ada file.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3">' + (allFiles.length ? 'Tidak ada file yang cocok.' : 'Belum ada file.') + '</td></tr>';
       return;
     }
     data.files.forEach((f) => {
@@ -101,6 +114,8 @@
       tbody.appendChild(tr);
     });
   }
+
+  document.getElementById("filterFile").oninput = renderList;
 
   document.getElementById("btnUpload").onclick = async () => {
     const fileInput = document.getElementById("file");
