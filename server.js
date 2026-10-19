@@ -107,17 +107,40 @@ const RELOAD_INTERVAL_MS = 5 * 60 * 1000;
 // =========================================================
 // 3. COCOKKAN PERTANYAAN USER KE FAQ (pakai Gemini sebagai "pemilih")
 // =========================================================
-async function cariFaqCocok(pertanyaanUser) {
-  if (faqList.length === 0) return null;
+// Ubah input filter (mis. "produk" / "Produk.docx") jadi daftar nama file .docx yang valid.
+// Mengembalikan { valid: [...], tidakDikenal: [...] }
+function resolveSumber(input) {
+  const diminta = (Array.isArray(input) ? input : [input])
+    .filter((x) => typeof x === "string" && x.trim())
+    .map((x) => x.trim());
+  const tersedia = daftarFileDocx();
+  const valid = [];
+  const tidakDikenal = [];
+  for (const d of diminta) {
+    const target = d.toLowerCase().endsWith(".docx") ? d.toLowerCase() : d.toLowerCase() + ".docx";
+    const ketemu = tersedia.find((f) => f.toLowerCase() === target);
+    if (ketemu) {
+      if (!valid.includes(ketemu)) valid.push(ketemu);
+    } else {
+      tidakDikenal.push(d);
+    }
+  }
+  return { valid, tidakDikenal };
+}
 
-  const daftarFaq = faqList.map((f, i) => `${i}. ${f.question}`).join("\n");
+// sumber = daftar nama file .docx yang boleh dipakai (kosong = semua file)
+async function cariFaqCocok(pertanyaanUser, sumber = []) {
+  const kandidat = sumber.length ? faqList.filter((f) => sumber.includes(f.source)) : faqList;
+  if (kandidat.length === 0) return null;
+
+  const daftarFaq = kandidat.map((f, i) => `${i}. ${f.question}`).join("\n");
   const prompt = `Daftar FAQ:\n${daftarFaq}\n\nPertanyaan pelanggan: "${pertanyaanUser}"\n\nJika pertanyaan pelanggan cocok/mirip maksud dengan salah satu nomor di atas, balas HANYA dengan angka nomornya saja (contoh: "2"). Jika tidak ada yang cocok, balas persis: TIDAK ADA`;
 
   try {
     const result = await model.generateContent(prompt);
     const jawaban = result.response.text().trim();
     const index = parseInt(jawaban, 10);
-    if (!isNaN(index) && faqList[index]) return faqList[index].answer;
+    if (!isNaN(index) && kandidat[index]) return kandidat[index];
     return null;
   } catch (err) {
     console.error("Gagal mencocokkan FAQ:", err.message);
@@ -176,18 +199,42 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", faqCount: faqList.length });
 });
 
+// Daftar filter yang tersedia (1 file .docx = 1 filter/kategori) + jumlah entri FAQ-nya
+app.get("/api/sources", (req, res) => {
+  const sources = daftarFileDocx().map((name) => ({
+    name,
+    label: name.replace(/\.docx$/i, ""),
+    entries: fileStats[name] ?? 0,
+  }));
+  res.json({ sources });
+});
+
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { messages, sources } = req.body;
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Format 'messages' tidak valid" });
     }
 
+    // Filter opsional: batasi pencarian FAQ ke file .docx tertentu
+    // contoh body: { "messages": [...], "sources": ["produk", "pengiriman.docx"] }
+    let sumber = [];
+    if (sources !== undefined && sources !== null && !(Array.isArray(sources) && sources.length === 0)) {
+      const { valid, tidakDikenal } = resolveSumber(sources);
+      if (tidakDikenal.length) {
+        return res.status(400).json({
+          error: `Filter tidak dikenal: ${tidakDikenal.join(", ")}`,
+          available: daftarFileDocx(),
+        });
+      }
+      sumber = valid;
+    }
+
     const pesanUser = messages[messages.length - 1].content;
 
-    const jawabanFaq = await cariFaqCocok(pesanUser);
-    if (jawabanFaq) {
-      return res.json({ reply: jawabanFaq, source: "faq" });
+    const faqCocok = await cariFaqCocok(pesanUser, sumber);
+    if (faqCocok) {
+      return res.json({ reply: faqCocok.answer, source: "faq", file: faqCocok.source });
     }
 
     const history = messages.slice(0, -1).map((m) => ({
