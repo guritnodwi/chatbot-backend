@@ -9,7 +9,7 @@ tanpa perlu restart server.
 server.js          → kode utama backend
 package.json       → daftar dependency
 public/admin.html  → halaman admin buat upload FAQ baru
-data/faq.docx      → data FAQ awal
+data/*.docx        → file FAQ (boleh lebih dari satu, semuanya dibaca)
 .env.example       → CONTOH isi .env (kosong, aman di-push)
 .gitignore         → mencegah .env & node_modules ikut ke-push
 ```
@@ -93,10 +93,13 @@ yang diupload lewat admin panel bakal balik ke versi awal (yang ikut ke-push di 
 ## Kalau mau update FAQ nanti
 
 Buka `namaproject.up.railway.app/admin.html` dari device mana saja → login → upload
-file `.docx` baru. Selesai, gak perlu sentuh kode atau GitHub sama sekali untuk sekadar
-ganti isi FAQ.
+satu atau **banyak file `.docx` sekaligus**. Semua file di folder `data/` digabung jadi
+satu basis FAQ. Upload file dengan nama yang sama akan menimpa file lama; tombol **Hapus**
+menghapus satu file. Gak perlu sentuh kode atau GitHub sama sekali.
 
-## Format isi file faq.docx
+Contoh pembagian file: `produk.docx`, `pengiriman.docx`, `kebijakan.docx`, dst.
+
+## Format isi setiap file .docx
 
 Setiap FAQ ditulis dengan format:
 ```
@@ -106,3 +109,30 @@ A: Jawabannya di sini.
 Q: Pertanyaan kedua?
 A: Jawaban kedua.
 ```
+
+---
+
+## Filter berdasarkan file .docx
+
+Setiap file `.docx` di folder `data/` bisa dipakai sebagai **filter/kategori**. Chatbot jadi hanya
+mencari jawaban FAQ di file yang dipilih (lebih akurat & hemat token Gemini).
+
+**1. Lihat filter yang tersedia**
+```
+GET /api/sources
+→ { "sources": [ { "name": "produk.docx", "label": "produk", "entries": 12 }, ... ] }
+```
+
+**2. Kirim filter di `/api/chat`** (opsional — kalau tidak dikirim, semua file dipakai)
+```json
+{
+  "messages": [{ "role": "user", "content": "Berapa lama pengiriman?" }],
+  "sources": ["pengiriman", "kebijakan.docx"]
+}
+```
+- Nama boleh dengan atau tanpa `.docx`, huruf besar/kecil tidak masalah.
+- Nama yang tidak ada → HTTP 400 beserta daftar `available`.
+- Kalau tidak ada FAQ yang cocok di file terpilih, pertanyaan tetap diteruskan ke Gemini (AI).
+- Respons FAQ sekarang menyertakan `file` (asal jawaban), contoh: `{ "reply": "...", "source": "faq", "file": "pengiriman.docx" }`.
+
+**3. Halaman admin** punya kotak pencarian untuk memfilter daftar file `.docx`.
