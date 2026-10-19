@@ -112,27 +112,23 @@ A: Jawaban kedua.
 
 ---
 
-## Filter berdasarkan file .docx
+## Lingkup kampus (selalu aktif)
 
-Setiap file `.docx` di folder `data/` bisa dipakai sebagai **filter/kategori**. Chatbot jadi hanya
-mencari jawaban FAQ di file yang dipilih (lebih akurat & hemat token Gemini).
+Chatbot **selalu** dibatasi pada topik kampus. Urutannya:
 
-**1. Lihat filter yang tersedia**
-```
-GET /api/sources
-→ { "sources": [ { "name": "produk.docx", "label": "produk", "entries": 12 }, ... ] }
-```
+1. **Cocok dengan FAQ** di file `.docx` → dijawab langsung dari FAQ (`source: "faq"`, plus `file` asalnya).
+2. **Tidak ada di FAQ tapi masih soal kampus** → dijawab AI dengan isi semua file `.docx` sebagai rujukan (`source: "ai-kampus"`).
+3. **Di luar kampus** (mis. resep masakan) → ditolak dengan sopan.
 
-**2. Kirim filter di `/api/chat`** (opsional — kalau tidak dikirim, semua file dipakai)
+Lingkup bisa diganti tanpa ubah kode lewat environment variable opsional `SCOPE_TOPIK`
+(default: kampus — akademik, KRS, jadwal, administrasi, biaya kuliah, fasilitas).
+
+### Opsional: batasi ke file tertentu
+
+Tidak wajib, tapi `/api/chat` masih menerima field `sources` untuk membatasi ke file tertentu:
 ```json
-{
-  "messages": [{ "role": "user", "content": "Berapa lama pengiriman?" }],
-  "sources": ["pengiriman", "kebijakan.docx"]
-}
+{ "messages": [{ "role": "user", "content": "Berapa lama pengiriman?" }], "sources": ["pengiriman"] }
 ```
-- Nama boleh dengan atau tanpa `.docx`, huruf besar/kecil tidak masalah.
-- Nama yang tidak ada → HTTP 400 beserta daftar `available`.
-- Kalau tidak ada FAQ yang cocok di file terpilih, pertanyaan tetap diteruskan ke Gemini (AI).
-- Respons FAQ sekarang menyertakan `file` (asal jawaban), contoh: `{ "reply": "...", "source": "faq", "file": "pengiriman.docx" }`.
+Daftar file tersedia di `GET /api/sources`. Nama yang tidak ada → HTTP 400 beserta daftar `available`.
 
-**3. Halaman admin** punya kotak pencarian untuk memfilter daftar file `.docx`.
+Halaman admin punya kotak pencarian untuk memfilter daftar file `.docx`.
