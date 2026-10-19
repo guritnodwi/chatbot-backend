@@ -15,10 +15,6 @@
   button { padding: 10px 16px; font-size: 15px; cursor: pointer; }
   #configBox { margin-bottom: 16px; font-size: 13px; color: #555; }
   #configBox input { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
-  #filterBox { margin-bottom: 16px; font-size: 13px; color: #555; }
-  #filterBox .opts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; }
-  #filterBox label.opt { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: #222; }
-  #filterBox small { color: #888; }
 </style>
 </head>
 <body>
@@ -27,11 +23,6 @@
   <div id="configBox">
     <label>URL Backend (isi otomatis, ganti kalau beda):</label>
     <input type="text" id="backendUrl" value="https://chatbot-backend-production-3798.up.railway.app/api/chat">
-  </div>
-
-  <div id="filterBox">
-    <label>Filter file .docx (kosongkan = pakai semua):</label>
-    <div class="opts" id="filterOpts"><small>Memuat...</small></div>
   </div>
 
   <div id="chatBox"></div>
@@ -43,40 +34,6 @@
 
 <script>
   let history = [];
-
-  // URL /api/sources diturunkan dari URL /api/chat
-  const sourcesUrl = () => document.getElementById("backendUrl").value.replace(/\/chat\/?$/, "/sources");
-
-  async function muatFilter() {
-    const box = document.getElementById("filterOpts");
-    try {
-      const res = await fetch(sourcesUrl());
-      const data = await res.json();
-      box.innerHTML = "";
-      if (!data.sources || !data.sources.length) {
-        box.innerHTML = "<small>Belum ada file .docx.</small>";
-        return;
-      }
-      data.sources.forEach((s) => {
-        const lbl = document.createElement("label");
-        lbl.className = "opt";
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.value = s.name;
-        lbl.append(cb, document.createTextNode(s.label + " (" + s.entries + ")"));
-        box.appendChild(lbl);
-      });
-    } catch (err) {
-      box.innerHTML = "<small>Gagal memuat filter: " + err.message + "</small>";
-    }
-  }
-
-  function filterTerpilih() {
-    return [...document.querySelectorAll("#filterOpts input:checked")].map((c) => c.value);
-  }
-
-  document.getElementById("backendUrl").addEventListener("change", muatFilter);
-  muatFilter();
 
   function tambahPesan(role, text) {
     const div = document.createElement("div");
@@ -102,7 +59,7 @@
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, sources: filterTerpilih() })
+        body: JSON.stringify({ messages: history })
       });
       const data = await res.json();
 
